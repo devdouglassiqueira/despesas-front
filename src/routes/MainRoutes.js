@@ -6,6 +6,7 @@ import AdminRolesPermissions from 'pages/Roles/index';
 import Logs from 'pages/Logs';
 import DadosDiscord from 'pages/Dados-discord';
 import Despesas from 'pages/Despesas';
+import ControleDespesas from 'pages/Controle-Despesas';
 
 const MainRoutes = [
   {
@@ -24,6 +25,10 @@ const MainRoutes = [
       {
         path: '/despesas',
         element: <Despesas />,
+      },
+      {
+        path: '/controle-despesas',
+        element: <ControleDespesas />,
       },
     ],
   },

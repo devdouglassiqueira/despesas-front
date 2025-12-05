@@ -1,6 +1,6 @@
 import { DiscordOutlined } from '@ant-design/icons';
 
-const despesas = {
+const Despesas = {
   id: 'group-despesas',
   title: 'Despesas',
   type: 'group',
@@ -13,7 +13,15 @@ const despesas = {
       icon: DiscordOutlined,
       breadcrumbs: false,
     },
+    {
+      id: 'controle-despesas',
+      title: 'Controle Despesas',
+      type: 'item',
+      url: '/controle-despesas',
+      icon: DiscordOutlined,
+      breadcrumbs: false,
+    },
   ],
 };
 
-export default despesas;
+export default Despesas;

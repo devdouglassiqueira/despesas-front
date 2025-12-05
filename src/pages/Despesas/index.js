@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -13,6 +13,9 @@ import {
   IconButton,
 } from '@mui/material';
 import { EditOutlined } from '@ant-design/icons';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 import MainCard from 'components/sistema/MainCard';
 import CriarDespesas from './components/criarDespesas';
 import EditarDespesas from './components/editarDespesas';
@@ -26,16 +29,23 @@ const ListaDespesas = () => {
   const [modalCriarOpen, setModalCriarOpen] = useState(false);
   const [modalEditarOpen, setModalEditarOpen] = useState(false);
 
+  // refs para cada bloco de tipo (para o PDF)
+  const cardRefs = useRef({});
+
   useEffect(() => {
     buscarDespesas();
   }, []);
 
-  const formatCurrency = (valor) =>
-    new Intl.NumberFormat('pt-BR', {
+  const formatCurrency = (valor) => {
+    const valorNumber = Number(
+      typeof valor === 'string' ? valor.replace(',', '.') : valor,
+    );
+    return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
       minimumFractionDigits: 2,
-    }).format(valor || 0);
+    }).format(isNaN(valorNumber) ? 0 : valorNumber);
+  };
 
   const buscarDespesas = async () => {
     try {
@@ -73,8 +83,52 @@ const ListaDespesas = () => {
     setPesquisa(event.target.value);
   };
 
+  // ---------- PDF POR BLOCO / TIPO (sempre 1 página, sem coluna Ações) ----------
+  const handleDownloadPDF = async (tipo) => {
+    const element = cardRefs.current[tipo];
+    if (!element) return;
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2, // melhora qualidade da imagem
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidthPx = canvas.width;
+      const imgHeightPx = canvas.height;
+
+      const margin = 10; // margem em mm
+      const maxWidth = pdfWidth - margin * 2;
+      const maxHeight = pdfHeight - margin * 2;
+
+      // ratio para caber LARGURA e ALTURA na mesma página
+      const ratio = Math.min(maxWidth / imgWidthPx, maxHeight / imgHeightPx);
+
+      const imgWidth = imgWidthPx * ratio;
+      const imgHeight = imgHeightPx * ratio;
+
+      const x = (pdfWidth - imgWidth) / 2;
+      const y = (pdfHeight - imgHeight) / 2;
+
+      pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+      pdf.save(`despesas-${tipo}.pdf`);
+    } catch (error) {
+      console.error(error);
+      notification({
+        message: 'Erro ao gerar PDF deste bloco!',
+        type: 'error',
+      });
+    }
+  };
+
   return (
     <Box sx={{ padding: '20px' }}>
+      {/* TOPO: pesquisa + botão nova despesa */}
       <Box
         sx={{
           display: 'flex',
@@ -109,7 +163,7 @@ const ListaDespesas = () => {
         </MainCard>
       )}
 
-      {/* CARDS POR TIPO (xxxx, xxv, etc) */}
+      {/* CARDS POR TIPO */}
       {resumo && (
         <Box
           sx={{
@@ -124,26 +178,65 @@ const ListaDespesas = () => {
               despesa.descricao?.toLowerCase().includes(pesquisa.toLowerCase()),
             );
 
-            // se não tiver nenhum item depois do filtro, nem mostra o card
             if (!itensFiltrados.length) return null;
 
             return (
               <MainCard
                 key={grupo.tipo}
                 title={grupo.tipo}
-                sx={{ flex: '1 1 350px' }}
+                sx={{ flex: '1 1 350px', position: 'relative' }}
               >
-                {/* lista de itens com os valores */}
+                {/* BOTÃO PARA PDF DO BLOCO (NÃO ENTRA NO PDF) */}
                 <Box
                   sx={{
-                    overflowX: 'auto',
-                    '&::-webkit-scrollbar': { width: '0.4em' },
-                    '&::-webkit-scrollbar-thumb': {
-                      backgroundColor: 'rgba(0,0,0,.1)',
-                      borderRadius: '4px',
-                    },
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    mb: 1,
                   }}
                 >
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => handleDownloadPDF(grupo.tipo)}
+                  >
+                    Baixar PDF
+                  </Button>
+                </Box>
+
+                {/* VERSÃO PARA PDF - ESCONDIDA DA TELA, SEM COLUNA AÇÕES */}
+                <Box
+                  ref={(el) => {
+                    cardRefs.current[grupo.tipo] = el;
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    left: '-99999px',
+                    top: 0,
+                    width: '800px', // largura fixa pro print ficar estável
+                    bgcolor: '#ffffff',
+                    p: 2,
+                  }}
+                >
+                  {/* CABEÇALHO DO BLOCO / PDF */}
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ fontSize: 18, fontWeight: 'bold' }}>
+                      {grupo.tipo}
+                    </Box>
+
+                    <Box sx={{ mt: 1, fontWeight: 'bold' }}>
+                      Total: {formatCurrency(grupo.total)}
+                    </Box>
+
+                    <Box sx={{ mt: 1 }}>
+                      {(grupo.porFormaPagamento || []).map((forma) => (
+                        <Box key={forma.formaPagamento}>
+                          {forma.formaPagamento}: {formatCurrency(forma.total)}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+
+                  {/* TABELA DE DESPESAS PARA PDF (SEM AÇÕES) */}
                   <TableContainer>
                     <Table>
                       <TableHead>
@@ -151,22 +244,16 @@ const ListaDespesas = () => {
                           <TableCell>Descrição</TableCell>
                           <TableCell>Valor</TableCell>
                           <TableCell>Forma de Pagamento</TableCell>
-                          <TableCell>Ações</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {itensFiltrados.map((despesa) => (
                           <TableRow key={despesa.id}>
                             <TableCell>{despesa.descricao}</TableCell>
-                            <TableCell>{despesa.valor}</TableCell>
-                            <TableCell>{despesa.formaPagamento}</TableCell>
                             <TableCell>
-                              <IconButton
-                                onClick={() => handleEditarDespesa(despesa)}
-                              >
-                                <EditOutlined />
-                              </IconButton>
+                              {formatCurrency(despesa.valor)}
                             </TableCell>
+                            <TableCell>{despesa.formaPagamento}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -174,15 +261,68 @@ const ListaDespesas = () => {
                   </TableContainer>
                 </Box>
 
-                {/* totais por forma de pagamento + total do tipo */}
-                <Box sx={{ mt: 2 }}>
-                  {(grupo.porFormaPagamento || []).map((forma) => (
-                    <Box key={forma.formaPagamento}>
-                      {forma.formaPagamento}: {formatCurrency(forma.total)}
+                {/* VERSÃO VISÍVEL NA TELA (COM AÇÕES) */}
+                <Box>
+                  {/* CABEÇALHO VISÍVEL */}
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ fontSize: 18, fontWeight: 'bold' }}>
+                      {grupo.tipo}
                     </Box>
-                  ))}
-                  <Box sx={{ mt: 1, fontWeight: 'bold' }}>
-                    Total: {formatCurrency(grupo.total)}
+
+                    <Box sx={{ mt: 1, fontWeight: 'bold' }}>
+                      Total do tipo: {formatCurrency(grupo.total)}
+                    </Box>
+
+                    <Box sx={{ mt: 1 }}>
+                      {(grupo.porFormaPagamento || []).map((forma) => (
+                        <Box key={forma.formaPagamento}>
+                          {forma.formaPagamento}: {formatCurrency(forma.total)}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+
+                  {/* TABELA VISÍVEL (COM AÇÕES) */}
+                  <Box
+                    sx={{
+                      overflowX: 'auto',
+                      '&::-webkit-scrollbar': { width: '0.4em' },
+                      '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: 'rgba(0,0,0,.1)',
+                        borderRadius: '4px',
+                      },
+                    }}
+                  >
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Descrição</TableCell>
+                            <TableCell>Valor</TableCell>
+                            <TableCell>Forma de Pagamento</TableCell>
+                            <TableCell>Ações</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {itensFiltrados.map((despesa) => (
+                            <TableRow key={despesa.id}>
+                              <TableCell>{despesa.descricao}</TableCell>
+                              <TableCell>
+                                {formatCurrency(despesa.valor)}
+                              </TableCell>
+                              <TableCell>{despesa.formaPagamento}</TableCell>
+                              <TableCell>
+                                <IconButton
+                                  onClick={() => handleEditarDespesa(despesa)}
+                                >
+                                  <EditOutlined />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Box>
                 </Box>
               </MainCard>
@@ -191,6 +331,7 @@ const ListaDespesas = () => {
         </Box>
       )}
 
+      {/* MODAIS */}
       <CriarDespesas
         open={modalCriarOpen}
         onClose={handleFecharModalCriar}
