@@ -1,4 +1,4 @@
-import { DiscordOutlined } from '@ant-design/icons';
+import { DollarOutlined, BankOutlined } from '@ant-design/icons';
 
 const Despesas = {
   id: 'group-despesas',
@@ -10,7 +10,7 @@ const Despesas = {
       title: 'Despesas',
       type: 'item',
       url: '/despesas',
-      icon: DiscordOutlined,
+      icon: DollarOutlined,
       breadcrumbs: false,
     },
     {
@@ -18,7 +18,7 @@ const Despesas = {
       title: 'Controle Despesas',
       type: 'item',
       url: '/controle-despesas',
-      icon: DiscordOutlined,
+      icon: BankOutlined,
       breadcrumbs: false,
     },
   ],

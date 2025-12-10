@@ -121,7 +121,7 @@ const CriarDespesas = ({ open, onClose, onSuccess }) => {
             fullWidth
           />
           <TextField
-            label="Nome da Pessoa"
+            label="Tipo de Despesa"
             name="tipo"
             value={formData.tipo}
             onChange={handleChange}

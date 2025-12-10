@@ -112,7 +112,7 @@ const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
             fullWidth
           />
           <TextField
-            label="Nome da Pessoa"
+            label="Tipo de despesa"
             name="tipo"
             value={formData.tipo}
             onChange={handleChange}
