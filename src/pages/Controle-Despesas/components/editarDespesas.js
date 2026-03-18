@@ -9,29 +9,64 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Autocomplete,
+  createFilterOptions,
 } from '@mui/material';
 import { api } from 'services/api';
 import { notification } from 'components/notification/index';
+
+const filter = createFilterOptions();
 
 const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
   const [formData, setFormData] = useState({
     valor: '',
     descricao: '',
     tipo: '',
+    contato: '',
+    categoria: '',
+    data: '',
   });
+
+  const [contatosOptions, setContatosOptions] = useState([]);
+  const [categoriasOptions, setCategoriasOptions] = useState([]);
 
   useEffect(() => {
     if (open && despesas) {
       setFormData({
-        valor: despesas.valor || '',
+        id: despesas.id,
+        valor: String(despesas.valor || ''),
         descricao: despesas.descricao || '',
         tipo: despesas.tipo || '',
+        contato: despesas.contato || '',
+        categoria: despesas.categoria || '',
+        data: despesas.data ? String(despesas.data).split('T')[0] : '',
       });
+      fetchOptions();
     }
   }, [open, despesas]);
 
+  const fetchOptions = async () => {
+    try {
+      const [resContatos, resCategorias] = await Promise.all([
+        api.get('/contatos'),
+        api.get('/categorias'),
+      ]);
+      setContatosOptions(resContatos.data || []);
+      setCategoriasOptions(resCategorias.data || []);
+    } catch (error) {
+      console.error('Erro ao buscar opções de contato/categoria', error);
+    }
+  };
+
   const handleChange = (event) => {
     const { name, value } = event.target;
+
+    if (name === 'valor') {
+      const normalizado = value.replace(',', '.');
+      setFormData((prev) => ({ ...prev, [name]: normalizado }));
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -39,10 +74,10 @@ const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
     const raw = String(formData.valor).trim();
     if (!raw) return;
 
-    const num = Number(raw.replace(',', '.'));
+    const num = Number(raw);
     if (Number.isNaN(num)) return;
 
-    const formatado = num.toFixed(2); // 22 -> 22.00, 21.1 -> 21.10
+    const formatado = num.toFixed(2);
     setFormData((prev) => ({ ...prev, valor: formatado }));
   };
 
@@ -99,6 +134,16 @@ const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
           sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
         >
           <TextField
+            label="Data"
+            name="data"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={formData.data ? formData.data.substring(0, 10) : ''}
+            onChange={handleChange}
+            fullWidth
+          />
+
+          <TextField
             label="Valor"
             name="valor"
             value={formData.valor}
@@ -114,6 +159,131 @@ const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
             fullWidth
           />
 
+          <Autocomplete
+            freeSolo
+            options={contatosOptions}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') {
+                return option;
+              }
+              if (option.inputValue) {
+                return option.inputValue;
+              }
+              return option.nome;
+            }}
+            value={formData.contato}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({ ...prev, contato: newInputValue }));
+            }}
+            onChange={async (event, newValue) => {
+              let valorFinal = '';
+              if (typeof newValue === 'string') {
+                valorFinal = newValue;
+              } else if (newValue && newValue.inputValue) {
+                try {
+                  const res = await api.post('/contatos', {
+                    nome: newValue.inputValue,
+                  });
+                  valorFinal = res.data.nome;
+                  setContatosOptions((prev) => [...prev, res.data]);
+                } catch (error) {
+                  console.error('Erro ao criar contato', error);
+                }
+              } else {
+                valorFinal = newValue?.nome || '';
+              }
+              setFormData((prev) => ({ ...prev, contato: valorFinal }));
+            }}
+            filterOptions={(options, params) => {
+              const filtered = filter(options, params);
+              const { inputValue } = params;
+              const isExisting = options.some(
+                (option) =>
+                  inputValue.toLowerCase() === option.nome?.toLowerCase(),
+              );
+              if (inputValue !== '' && !isExisting) {
+                filtered.push({
+                  inputValue,
+                  nome: `Adicionar "${inputValue}"`,
+                });
+              }
+              return filtered;
+            }}
+            selectOnFocus
+            handleHomeEndKeys
+            renderOption={(props, option) => (
+              <li {...props}>
+                {typeof option === 'string' ? option : option.nome}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} label="Contato" fullWidth />
+            )}
+          />
+
+          <Autocomplete
+            freeSolo
+            options={categoriasOptions}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') {
+                return option;
+              }
+              if (option.inputValue) {
+                return option.inputValue;
+              }
+              return option.nome;
+            }}
+            value={formData.categoria}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({ ...prev, categoria: newInputValue }));
+            }}
+            onChange={async (event, newValue) => {
+              let valorFinal = '';
+              if (typeof newValue === 'string') {
+                valorFinal = newValue;
+              } else if (newValue && newValue.inputValue) {
+                try {
+                  const res = await api.post('/categorias', {
+                    nome: newValue.inputValue,
+                  });
+                  valorFinal = res.data.nome;
+                  setCategoriasOptions((prev) => [...prev, res.data]);
+                } catch (error) {
+                  console.error('Erro ao criar categoria', error);
+                }
+              } else {
+                valorFinal = newValue?.nome || '';
+              }
+              setFormData((prev) => ({ ...prev, categoria: valorFinal }));
+            }}
+            filterOptions={(options, params) => {
+              const filtered = filter(options, params);
+              const { inputValue } = params;
+              const isExisting = options.some(
+                (option) =>
+                  inputValue.toLowerCase() === option.nome?.toLowerCase(),
+              );
+              if (inputValue !== '' && !isExisting) {
+                filtered.push({
+                  inputValue,
+                  nome: `Adicionar "${inputValue}"`,
+                });
+              }
+              return filtered;
+            }}
+            selectOnFocus
+            clearOnBlur
+            handleHomeEndKeys
+            renderOption={(props, option) => (
+              <li {...props}>
+                {typeof option === 'string' ? option : option.nome}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} label="Categoria" fullWidth />
+            )}
+          />
+
           <FormControl fullWidth>
             <InputLabel id="tipo-label">Tipo da Transação</InputLabel>
             <Select
@@ -122,9 +292,21 @@ const EditarDespesas = ({ open, onClose, onSuccess, despesas }) => {
               value={formData.tipo}
               onChange={handleChange}
               label="Tipo da Transação"
+              sx={{
+                color:
+                  formData.tipo === 'entrada'
+                    ? 'success.main'
+                    : formData.tipo === 'saida'
+                      ? 'error.main'
+                      : 'inherit',
+              }}
             >
-              <MenuItem value="entrada">Entrada</MenuItem>
-              <MenuItem value="saida">Saída</MenuItem>
+              <MenuItem value="entrada" sx={{ color: 'success.main' }}>
+                Entrada
+              </MenuItem>
+              <MenuItem value="saida" sx={{ color: 'error.main' }}>
+                Saída
+              </MenuItem>
             </Select>
           </FormControl>
 

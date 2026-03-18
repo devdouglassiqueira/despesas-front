@@ -11,7 +11,7 @@ import componentsOverride from './overrides';
 import { ColorModeContext } from 'context/ColorModeContext';
 
 export default function ThemeCustomization({ children }) {
-  const [mode, setMode] = useState('light');
+  const [mode, setMode] = useState('dark'); // Always start with dark mode
 
   const colorMode = useMemo(
     () => ({
@@ -24,7 +24,7 @@ export default function ThemeCustomization({ children }) {
 
   const themePalette = Palette(mode, 'default');
 
-  const themeTypography = Typography(`'Public Sans', sans-serif`);
+  const themeTypography = Typography(`'Outfit', 'Inter', sans-serif`);
   const themeCustomShadows = useMemo(
     () => CustomShadows(themePalette),
     [themePalette],

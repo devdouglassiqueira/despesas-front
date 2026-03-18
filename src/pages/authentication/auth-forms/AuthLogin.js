@@ -77,10 +77,6 @@ const AuthLogin = () => {
                     placeholder="Insira o endereço de e-mail"
                     fullWidth
                     error={Boolean(touched.email && errors.email)}
-                    sx={{
-                      backgroundColor: '#eafaf1', // Verde claro
-                      borderRadius: '8px',
-                    }}
                   />
                   {touched.email && errors.email && (
                     <FormHelperText
@@ -110,9 +106,6 @@ const AuthLogin = () => {
                           edge="end"
                           aria-label="toggle password visibility"
                           size="large"
-                          sx={{
-                            color: '#388e3c', // Verde médio
-                          }}
                         >
                           {showPassword ? (
                             <EyeOutlined />
@@ -125,10 +118,6 @@ const AuthLogin = () => {
                     placeholder="Digite a senha"
                     fullWidth
                     error={Boolean(touched.password && errors.password)}
-                    sx={{
-                      backgroundColor: '#eafaf1', // Verde claro
-                      borderRadius: '8px',
-                    }}
                   />
                   {touched.password && errors.password && (
                     <FormHelperText
@@ -154,13 +143,6 @@ const AuthLogin = () => {
                     size="large"
                     type="submit"
                     variant="contained"
-                    sx={{
-                      backgroundColor: '#388e3c', // Verde médio
-                      '&:hover': {
-                        backgroundColor: '#2e7d32', // Verde escuro
-                      },
-                      borderRadius: '8px',
-                    }}
                   >
                     Entrar
                   </Button>

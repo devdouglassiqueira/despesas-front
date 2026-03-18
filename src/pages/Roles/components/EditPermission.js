@@ -10,7 +10,7 @@ const modalStyle = {
   left: '50%',
   transform: 'translate(-50%, -50%)',
   width: 400,
-  bgcolor: 'background.paper',
+  bgcolor: 'grey.900',
   p: 4,
   borderRadius: 2,
 };

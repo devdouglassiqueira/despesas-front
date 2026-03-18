@@ -1,5 +1,5 @@
 const config = {
-  loggedInPath: '/dashboard',
+  loggedInPath: '/despesas',
   loggedOutPath: '/login',
   fontFamily: `'Public Sans', sans-serif`,
   i18n: 'en',

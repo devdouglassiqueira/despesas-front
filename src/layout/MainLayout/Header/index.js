@@ -1,17 +1,18 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useTheme } from '@mui/material/styles';
-import { AppBar, IconButton, Toolbar, useMediaQuery } from '@mui/material';
+import {
+  AppBar,
+  IconButton,
+  Toolbar,
+  useMediaQuery,
+  GlobalStyles,
+} from '@mui/material';
 
 import AppBarStyled from './AppBarStyled';
 import HeaderContent from './HeaderContent';
 
-import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  BulbOutlined,
-  BulbFilled,
-} from '@ant-design/icons';
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 
 import { ColorModeContext } from 'context/ColorModeContext';
 
@@ -22,7 +23,7 @@ const Header = ({ open, handleDrawerToggle }) => {
   const { toggleColorMode } = useContext(ColorModeContext);
   const isLight = theme.palette.mode === 'light';
 
-  const iconBackColor = 'grey.100';
+  const iconBackColor = 'grey.200';
   const iconBackColorOpen = 'grey.200';
 
   const mainHeader = (
@@ -34,25 +35,15 @@ const Header = ({ open, handleDrawerToggle }) => {
         edge="start"
         color="secondary"
         sx={{
-          color: 'text.primary',
+          color: 'blue',
           bgcolor: open ? iconBackColorOpen : iconBackColor,
           ml: { xs: 0, lg: -2 },
         }}
       >
         {!open ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
       </IconButton>
-
       <HeaderContent />
-
-      <IconButton
-        aria-label="toggle theme"
-        onClick={toggleColorMode}
-        sx={{ ml: 'auto' }}
-        color="inherit"
-      >
-        {isLight ? <BulbOutlined /> : <BulbFilled />}
-      </IconButton>
-    </Toolbar>
+    </Toolbar >
   );
 
   const appBarProps = {

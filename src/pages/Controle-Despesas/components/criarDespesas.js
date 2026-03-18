@@ -10,24 +10,48 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Autocomplete,
+  createFilterOptions,
 } from '@mui/material';
 import { api } from 'services/api';
 import { notification } from 'components/notification/index';
+
+const filter = createFilterOptions();
 
 const CriarDespesas = ({ open, onClose, onSuccess }) => {
   const initialFormData = {
     valor: '',
     descricao: '',
     tipo: '', // entrada | saida
+    contato: '',
+    categoria: '',
+    data: new Date().toISOString().split('T')[0], // Hoje como padrão
   };
 
   const [formData, setFormData] = useState(initialFormData);
 
+  const [contatosOptions, setContatosOptions] = useState([]);
+  const [categoriasOptions, setCategoriasOptions] = useState([]);
+
   useEffect(() => {
     if (open) {
       setFormData(initialFormData);
+      fetchOptions();
     }
   }, [open]);
+
+  const fetchOptions = async () => {
+    try {
+      const [resContatos, resCategorias] = await Promise.all([
+        api.get('/contatos'),
+        api.get('/categorias'),
+      ]);
+      setContatosOptions(resContatos.data || []);
+      setCategoriasOptions(resCategorias.data || []);
+    } catch (error) {
+      console.error('Erro ao buscar opções de contato/categoria', error);
+    }
+  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -113,6 +137,16 @@ const CriarDespesas = ({ open, onClose, onSuccess }) => {
           sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
         >
           <TextField
+            label="Data"
+            name="data"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={formData.data || ''}
+            onChange={handleChange}
+            fullWidth
+          />
+
+          <TextField
             label="Valor"
             name="valor"
             value={formData.valor}
@@ -129,6 +163,139 @@ const CriarDespesas = ({ open, onClose, onSuccess }) => {
             fullWidth
           />
 
+          <Autocomplete
+            freeSolo
+            options={contatosOptions}
+            getOptionLabel={(option) => {
+              // Value selected with enter, right from the input
+              if (typeof option === 'string') {
+                return option;
+              }
+              // Add "xxx" option created dynamically
+              if (option.inputValue) {
+                return option.inputValue;
+              }
+              // Regular option
+              return option.nome;
+            }}
+            value={formData.contato}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({ ...prev, contato: newInputValue }));
+            }}
+            onChange={async (event, newValue) => {
+              let valorFinal = '';
+              if (typeof newValue === 'string') {
+                valorFinal = newValue;
+              } else if (newValue && newValue.inputValue) {
+                // Create a new value from the user input
+                try {
+                  const res = await api.post('/contatos', {
+                    nome: newValue.inputValue,
+                  });
+                  valorFinal = res.data.nome;
+                  setContatosOptions((prev) => [...prev, res.data]);
+                } catch (error) {
+                  console.error('Erro ao criar contato', error);
+                }
+              } else {
+                valorFinal = newValue?.nome || '';
+              }
+              setFormData((prev) => ({ ...prev, contato: valorFinal }));
+            }}
+            filterOptions={(options, params) => {
+              const filtered = filter(options, params);
+
+              const { inputValue } = params;
+              // Suggest the creation of a new value
+              const isExisting = options.some(
+                (option) =>
+                  inputValue.toLowerCase() === option.nome?.toLowerCase(),
+              );
+              if (inputValue !== '' && !isExisting) {
+                filtered.push({
+                  inputValue,
+                  nome: `Adicionar "${inputValue}"`,
+                });
+              }
+
+              return filtered;
+            }}
+            selectOnFocus
+            handleHomeEndKeys
+            renderOption={(props, option) => (
+              <li {...props}>
+                {typeof option === 'string' ? option : option.nome}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} label="Contato" fullWidth />
+            )}
+          />
+
+          <Autocomplete
+            freeSolo
+            options={categoriasOptions}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') {
+                return option;
+              }
+              if (option.inputValue) {
+                return option.inputValue;
+              }
+              return option.nome;
+            }}
+            value={formData.categoria}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({ ...prev, categoria: newInputValue }));
+            }}
+            onChange={async (event, newValue) => {
+              let valorFinal = '';
+              if (typeof newValue === 'string') {
+                valorFinal = newValue;
+              } else if (newValue && newValue.inputValue) {
+                try {
+                  const res = await api.post('/categorias', {
+                    nome: newValue.inputValue,
+                  });
+                  valorFinal = res.data.nome;
+                  setCategoriasOptions((prev) => [...prev, res.data]);
+                } catch (error) {
+                  console.error('Erro ao criar categoria', error);
+                }
+              } else {
+                valorFinal = newValue?.nome || '';
+              }
+              setFormData((prev) => ({ ...prev, categoria: valorFinal }));
+            }}
+            filterOptions={(options, params) => {
+              const filtered = filter(options, params);
+
+              const { inputValue } = params;
+              const isExisting = options.some(
+                (option) =>
+                  inputValue.toLowerCase() === option.nome?.toLowerCase(),
+              );
+              if (inputValue !== '' && !isExisting) {
+                filtered.push({
+                  inputValue,
+                  nome: `Adicionar "${inputValue}"`,
+                });
+              }
+
+              return filtered;
+            }}
+            selectOnFocus
+            handleHomeEndKeys
+            renderOption={(props, option) => (
+              <li {...props}>
+                {typeof option === 'string' ? option : option.nome}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} label="Categoria" fullWidth />
+            )}
+          />
+
           <FormControl fullWidth>
             <InputLabel id="tipo-label">Tipo da Transação</InputLabel>
             <Select
@@ -137,9 +304,21 @@ const CriarDespesas = ({ open, onClose, onSuccess }) => {
               value={formData.tipo}
               onChange={handleChange}
               label="Tipo da Transação"
+              sx={{
+                color:
+                  formData.tipo === 'entrada'
+                    ? 'success.main'
+                    : formData.tipo === 'saida'
+                      ? 'error.main'
+                      : 'inherit',
+              }}
             >
-              <MenuItem value="entrada">Entrada</MenuItem>
-              <MenuItem value="saida">Saída</MenuItem>
+              <MenuItem value="entrada" sx={{ color: 'success.main' }}>
+                Entrada
+              </MenuItem>
+              <MenuItem value="saida" sx={{ color: 'error.main' }}>
+                Saída
+              </MenuItem>
             </Select>
           </FormControl>
 

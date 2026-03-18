@@ -6,6 +6,27 @@ const notyf = new Notyf({
     x: 'right',
     y: 'top',
   },
+  // Define cores customizadas para os tipos de notificação
+  types: [
+    {
+      type: 'success',
+      background: '#28a745', // Green
+      icon: {
+        className: 'notyf__icon--success',
+        tagName: 'i',
+        color: '#ffffff',
+      },
+    },
+    {
+      type: 'error',
+      background: '#dc3545', // Red
+      icon: {
+        className: 'notyf__icon--error',
+        tagName: 'i',
+        color: '#ffffff',
+      },
+    },
+  ],
 });
 
 export const notification = ({ message, type }) => {

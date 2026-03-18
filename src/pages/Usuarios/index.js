@@ -160,7 +160,9 @@ const ListaUsuarios = () => {
                           }
                           sx={{
                             backgroundColor:
-                              usuario.status === 'active' ? 'green' : 'gray',
+                              usuario.status === 'active'
+                                ? '#9e9e9e'
+                                : '#424242',
                             color: 'white',
                             fontWeight: 'bold',
                           }}

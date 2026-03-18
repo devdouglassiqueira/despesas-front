@@ -1,447 +1,351 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Grid,
+  Typography,
   Box,
+  Stack,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  alpha,
+  Paper,
 } from '@mui/material';
-import { EditOutlined } from '@ant-design/icons';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
-import MainCard from 'components/sistema/MainCard';
-import CriarDespesas from './components/criarDespesas';
-import EditarDespesas from './components/editarDespesas';
+import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { api } from 'services/api';
-import { notification } from 'components/notification/index';
+import { useAuth } from 'hooks/auth';
+import AnalyticsChart from './components/AnalyticsChart';
+import ActivityChart from './components/ActivityChart';
+import TransactionList from './components/TransactionList';
+import AddTransactionModal from './components/AddTransactionModal';
+import EditTransactionModal from './components/EditTransactionModal';
+import ImportTransactionsModal from './components/ImportTransactionsModal';
 
-// 🔹 Soma os totais por forma de pagamento considerando todos os tipos
-const calcularTotaisPorFormaPagamento = (porTipo = []) => {
-  const mapa = {};
+const DespesasPage = () => {
+  const { user } = useAuth();
 
-  porTipo.forEach((grupo) => {
-    (grupo.porFormaPagamento || []).forEach((forma) => {
-      const chave = forma.formaPagamento || 'Não informado';
-      const valor = Number(
-        typeof forma.total === 'string'
-          ? forma.total.replace(',', '.')
-          : forma.total,
-      );
-
-      mapa[chave] = (mapa[chave] || 0) + (isNaN(valor) ? 0 : valor);
-    });
+  const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [filters] = useState({
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
   });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editFormOpen, setEditFormOpen] = useState(false);
+  const [importFormOpen, setImportFormOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
-  return Object.entries(mapa).map(([formaPagamento, total]) => ({
-    formaPagamento,
-    total,
-  }));
-};
-
-const ListaDespesas = () => {
-  const [resumo, setResumo] = useState(null); // totalGeral + porTipo
-  const [despesasSelecionado, setDespesasSelecionado] = useState(null);
-  const [pesquisa, setPesquisa] = useState('');
-  const [modalCriarOpen, setModalCriarOpen] = useState(false);
-  const [modalEditarOpen, setModalEditarOpen] = useState(false);
-
-  // novos modais de totais
-  const [modalResumoOpen, setModalResumoOpen] = useState(false);
-  const [modalFormaPagOpen, setModalFormaPagOpen] = useState(false);
-
-  // refs para cada bloco de tipo (para o PDF)
-  const cardRefs = useRef({});
+  const fetchData = async () => {
+    try {
+      const { month, year } = filters;
+      const [dashboardRes, transRes, catRes, accRes] = await Promise.all([
+        api.get('/transactions/dashboard', { params: { month, year } }),
+        api.get('/transactions', { params: { month, year } }),
+        api.get('/categories'),
+        api.get('/accounts'),
+      ]);
+      setSummary(dashboardRes.data);
+      setTransactions(transRes.data);
+      setCategories(catRes.data);
+      setAccounts(accRes.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
 
   useEffect(() => {
-    buscarDespesas();
-  }, []);
+    fetchData();
+  }, [filters.month, filters.year]);
 
-  const formatCurrency = (valor) => {
-    const valorNumber = Number(
-      typeof valor === 'string' ? valor.replace(',', '.') : valor,
-    );
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-    }).format(isNaN(valorNumber) ? 0 : valorNumber);
-  };
-
-  const buscarDespesas = async () => {
-    try {
-      const response = await api.get('/despesas/filtros');
-      const { totalGeral, porTipo } = response.data;
-      setResumo({ totalGeral, porTipo });
-    } catch (error) {
-      notification({ message: 'Erro ao buscar despesas!', type: 'error' });
-    }
-  };
-
-  const handleNovaDespesa = () => {
-    setModalCriarOpen(true);
-  };
-
-  const handleFecharModalCriar = () => {
-    setModalCriarOpen(false);
-  };
-
-  const handleEditarDespesa = (despesa) => {
-    setDespesasSelecionado(despesa);
-    setModalEditarOpen(true);
-  };
-
-  const handleFecharModalEditar = () => {
-    setDespesasSelecionado(null);
-    setModalEditarOpen(false);
-  };
-
-  const atualizarListaDespesas = () => {
-    buscarDespesas();
-  };
-
-  const handlePesquisaChange = (event) => {
-    setPesquisa(event.target.value);
-  };
-
-  // totais gerais por forma de pagamento (somando todos os tipos)
-  const totaisPorFormaPagamento = calcularTotaisPorFormaPagamento(
-    resumo?.porTipo || [],
-  );
-
-  // ---------- PDF POR BLOCO / TIPO (sempre 1 página, sem coluna Ações) ----------
-  const handleDownloadPDF = async (tipo) => {
-    const element = cardRefs.current[tipo];
-    if (!element) return;
-
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 2, // melhora qualidade da imagem
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      const imgWidthPx = canvas.width;
-      const imgHeightPx = canvas.height;
-
-      const margin = 10; // margem em mm
-      const maxWidth = pdfWidth - margin * 2;
-      const maxHeight = pdfHeight - margin * 2;
-
-      // ratio para caber LARGURA e ALTURA na mesma página
-      const ratio = Math.min(maxWidth / imgWidthPx, maxHeight / imgHeightPx);
-
-      const imgWidth = imgWidthPx * ratio;
-      const imgHeight = imgHeightPx * ratio;
-
-      const x = (pdfWidth - imgWidth) / 2;
-      const y = (pdfHeight - imgHeight) / 2;
-
-      pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-      pdf.save(`despesas-${tipo}.pdf`);
-    } catch (error) {
-      console.error(error);
-      notification({
-        message: 'Erro ao gerar PDF deste bloco!',
-        type: 'error',
-      });
-    }
+  const handleEditClick = (transaction) => {
+    setSelectedTransaction(transaction);
+    setEditFormOpen(true);
   };
 
   return (
-    <Box sx={{ padding: '20px' }}>
-      {/* TOPO: pesquisa + botões */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          paddingBottom: '10px',
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
-      >
-        <TextField
-          label="Pesquisar por Descrição"
-          variant="outlined"
-          value={pesquisa}
-          onChange={handlePesquisaChange}
-          sx={{ width: '300px' }}
-        />
-
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            disabled={!resumo}
-            onClick={() => setModalResumoOpen(true)}
-          >
-            Totais Gerais
-          </Button>
-
-          <Button
-            variant="outlined"
-            disabled={!resumo}
-            onClick={() => setModalFormaPagOpen(true)}
-          >
-            Totais por Forma de Pagamento
-          </Button>
-
-          <Button onClick={handleNovaDespesa} variant="contained">
-            Adicionar Nova Despesa
-          </Button>
-        </Box>
-      </Box>
-
-      {/* MODAL 1 - TOTAIS GERAIS (total + por tipo) */}
-      <Dialog
-        open={modalResumoOpen}
-        onClose={() => setModalResumoOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Totais Gerais</DialogTitle>
-        <DialogContent dividers>
-          {resumo ? (
-            <Box>
-              <Box sx={{ fontWeight: 'bold', mb: 2 }}>
-                Valor Total: {formatCurrency(resumo.totalGeral)}
-              </Box>
-
-              {(resumo.porTipo || []).map((grupo) => (
-                <Box key={grupo.tipo}>
-                  Valor Total {grupo.tipo}: {formatCurrency(grupo.total)}
-                </Box>
-              ))}
-            </Box>
-          ) : (
-            <Box>Nenhuma informação de resumo disponível.</Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setModalResumoOpen(false)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* MODAL 2 - TOTAIS POR FORMA DE PAGAMENTO */}
-      <Dialog
-        open={modalFormaPagOpen}
-        onClose={() => setModalFormaPagOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Totais por Forma de Pagamento</DialogTitle>
-        <DialogContent dividers>
-          {totaisPorFormaPagamento.length > 0 ? (
-            <Box>
-              {totaisPorFormaPagamento.map((item) => (
-                <Box key={item.formaPagamento}>
-                  {item.formaPagamento}: {formatCurrency(item.total)}
-                </Box>
-              ))}
-            </Box>
-          ) : (
-            <Box>Nenhuma informação de formas de pagamento disponível.</Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setModalFormaPagOpen(false)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* CARDS POR TIPO */}
-      {resumo && (
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 2,
-          }}
+    <Box
+      sx={{
+        p: { xs: 3, lg: 6 },
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      {/* Header Content */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: 800, color: 'white', mb: 0.5 }}
         >
-          {(resumo.porTipo || []).map((grupo) => {
-            // filtra itens pela descrição digitada
-            const itensFiltrados = (grupo.itens || []).filter((despesa) =>
-              despesa.descricao?.toLowerCase().includes(pesquisa.toLowerCase()),
-            );
+          Bem-vindo de volta, {user?.name?.split(' ')[0] || ''} 👋
+        </Typography>
+      </Stack>
 
-            if (!itensFiltrados.length) return null;
-
-            return (
-              <MainCard
-                key={grupo.tipo}
-                sx={{ flex: '1 1 350px', position: 'relative' }}
+      {/* Dashboard Grid */}
+      <Grid container spacing={6}>
+        {/* Main Column */}
+        <Grid item xs={12} lg={8}>
+          <Stack spacing={6}>
+            {/* Summary Cards */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={6}>
+              <Paper
+                sx={{
+                  flex: 1,
+                  p: 4,
+                  bgcolor: '#1a1a2e',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
               >
-                {/* BOTÃO PARA PDF DO BLOCO (NÃO ENTRA NO PDF) */}
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 4,
+                    bgcolor: alpha('#4ade80', 0.1),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#4ade80',
+                  }}
+                >
+                  <ArrowDownOutlined style={{ fontSize: '24px' }} />
+                </Box>
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: 'grey.500', mb: 0.5 }}
+                  >
+                    Entradas
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} alignItems="baseline">
+                    <Typography
+                      variant="h4"
+                      sx={{ fontWeight: 800, color: 'white' }}
+                    >
+                      ${(summary?.summary?.income || 0).toLocaleString()}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: '#4ade80', fontWeight: 700 }}
+                    >
+                      +1.29%
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Paper>
+              <Paper
+                sx={{
+                  flex: 1,
+                  p: 4,
+                  bgcolor: '#1a1a2e',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 4,
+                    bgcolor: alpha('#f43f5e', 0.1),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#f43f5e',
+                  }}
+                >
+                  <ArrowUpOutlined style={{ fontSize: '24px' }} />
+                </Box>
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: 'grey.500', mb: 0.5 }}
+                  >
+                    Saídas
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} alignItems="baseline">
+                    <Typography
+                      variant="h4"
+                      sx={{ fontWeight: 800, color: 'white' }}
+                    >
+                      ${(summary?.summary?.expense || 0).toLocaleString()}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: '#f43f5e', fontWeight: 700 }}
+                    >
+                      +1.29%
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Paper>
+            </Stack>
+
+            {/* Analytics Chart */}
+            <AnalyticsChart data={summary} />
+
+            {/* Transactions List */}
+            <TransactionList
+              transactions={transactions}
+              onEdit={handleEditClick}
+              onAdd={() => setFormOpen(true)}
+            />
+          </Stack>
+        </Grid>
+
+        {/* Right Column */}
+        <Grid item xs={12} lg={4}>
+          <Stack spacing={6}>
+            {/* My Card Section Placeholder */}
+            <Paper
+              sx={{
+                p: 4,
+                bgcolor: '#1a1a2e',
+                borderRadius: 6,
+                height: 300,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{ color: 'white', fontWeight: 700, mb: 3 }}
+              >
+                Meu Cartão
+              </Typography>
+              <Box
+                sx={{
+                  height: 200,
+                  borderRadius: 5,
+                  background:
+                    'linear-gradient(135deg, #5c67f2 0%, #3e48cc 100%)',
+                  p: 3,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
                 <Box
                   sx={{
                     display: 'flex',
-                    justifyContent: 'flex-end',
-                    mb: 1,
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
                   }}
                 >
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleDownloadPDF(grupo.tipo)}
-                  >
-                    Baixar PDF
-                  </Button>
-                </Box>
-
-                {/* VERSÃO PARA PDF - ESCONDIDA DA TELA, SEM COLUNA AÇÕES */}
-                <Box
-                  ref={(el) => {
-                    cardRefs.current[grupo.tipo] = el;
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    left: '-99999px',
-                    top: 0,
-                    width: '800px', // largura fixa pro print ficar estável
-                    bgcolor: '#ffffff',
-                    p: 2,
-                  }}
-                >
-                  {/* CABEÇALHO DO BLOCO / PDF */}
-                  <Box sx={{ mb: 2 }}>
-                    <Box sx={{ fontSize: 18, fontWeight: 'bold' }}>
-                      {grupo.tipo}
-                    </Box>
-
-                    <Box sx={{ mt: 1, fontWeight: 'bold' }}>
-                      Total: {formatCurrency(grupo.total)}
-                    </Box>
-
-                    <Box sx={{ mt: 1 }}>
-                      {(grupo.porFormaPagamento || []).map((forma) => (
-                        <Box key={forma.formaPagamento}>
-                          {forma.formaPagamento}: {formatCurrency(forma.total)}
-                        </Box>
-                      ))}
-                    </Box>
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: alpha('#fff', 0.8) }}
+                    >
+                      Saldo Atual
+                    </Typography>
+                    <Typography
+                      variant="h5"
+                      sx={{ color: 'white', fontWeight: 800 }}
+                    >
+                      $
+                      {(
+                        summary?.summary?.income - summary?.summary?.expense ||
+                        0
+                      ).toLocaleString()}
+                    </Typography>
                   </Box>
-
-                  {/* TABELA DE DESPESAS PARA PDF (SEM AÇÕES) */}
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Descrição</TableCell>
-                          <TableCell>Valor</TableCell>
-                          <TableCell>Forma de Pagamento</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {itensFiltrados.map((despesa) => (
-                          <TableRow key={despesa.id}>
-                            <TableCell>{despesa.descricao}</TableCell>
-                            <TableCell>
-                              {formatCurrency(despesa.valor)}
-                            </TableCell>
-                            <TableCell>{despesa.formaPagamento}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-
-                {/* VERSÃO VISÍVEL NA TELA (COM AÇÕES) */}
-                <Box>
-                  {/* CABEÇALHO VISÍVEL */}
-                  <Box sx={{ mb: 2 }}>
-                    <Box sx={{ fontSize: 18, fontWeight: 'bold' }}>
-                      {grupo.tipo}
-                    </Box>
-
-                    <Box sx={{ mt: 1, fontWeight: 'bold' }}>
-                      Total: {formatCurrency(grupo.total)}
-                    </Box>
-
-                    <Box sx={{ mt: 1 }}>
-                      {(grupo.porFormaPagamento || []).map((forma) => (
-                        <Box key={forma.formaPagamento}>
-                          {forma.formaPagamento}: {formatCurrency(forma.total)}
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-
-                  {/* TABELA VISÍVEL (COM AÇÕES) */}
                   <Box
                     sx={{
-                      overflowX: 'auto',
-                      '&::-webkit-scrollbar': { width: '0.4em' },
-                      '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: 'rgba(0,0,0,.1)',
-                        borderRadius: '4px',
-                      },
+                      width: 40,
+                      height: 24,
+                      bgcolor: alpha('#fff', 0.2),
+                      borderRadius: 1,
                     }}
-                  >
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Descrição</TableCell>
-                            <TableCell>Valor</TableCell>
-                            <TableCell>Forma de Pagamento</TableCell>
-                            <TableCell>Ações</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {itensFiltrados.map((despesa) => (
-                            <TableRow key={despesa.id}>
-                              <TableCell>{despesa.descricao}</TableCell>
-                              <TableCell>
-                                {formatCurrency(despesa.valor)}
-                              </TableCell>
-                              <TableCell>{despesa.formaPagamento}</TableCell>
-                              <TableCell>
-                                <IconButton
-                                  onClick={() => handleEditarDespesa(despesa)}
-                                >
-                                  <EditOutlined />
-                                </IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Box>
+                  />
                 </Box>
-              </MainCard>
-            );
-          })}
-        </Box>
-      )}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1.5,
+                  }}
+                >
+                  <Typography
+                    variant="h5"
+                    sx={{ color: 'white', letterSpacing: 4, pt: 1 }}
+                  >
+                    •••• 1289
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: alpha('#fff', 0.8), fontSize: '0.85rem' }}
+                  >
+                    09/25
+                  </Typography>
+                </Box>
+              </Box>
+              <Stack direction="row" spacing={2} sx={{ mt: 'auto' }}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  sx={{
+                    bgcolor: '#5c67f2',
+                    borderRadius: 3,
+                    textTransform: 'none',
+                    py: 1.5,
+                  }}
+                >
+                  Gerenciar Cartões
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  sx={{
+                    color: 'white',
+                    borderColor: alpha('#fff', 0.1),
+                    borderRadius: 3,
+                    textTransform: 'none',
+                    py: 1.5,
+                  }}
+                >
+                  Transferir
+                </Button>
+              </Stack>
+            </Paper>
 
-      {/* MODAIS DE CRIAÇÃO / EDIÇÃO */}
-      <CriarDespesas
-        open={modalCriarOpen}
-        onClose={handleFecharModalCriar}
-        onSuccess={atualizarListaDespesas}
+            {/* Activity Chart Section */}
+            <ActivityChart data={summary} />
+          </Stack>
+        </Grid>
+      </Grid>
+
+      {/* Modals from original code */}
+      <AddTransactionModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSuccess={fetchData}
+        categories={categories}
+        accounts={accounts}
       />
-      <EditarDespesas
-        open={modalEditarOpen}
-        onClose={handleFecharModalEditar}
-        onSuccess={atualizarListaDespesas}
-        despesas={despesasSelecionado}
+
+      <EditTransactionModal
+        open={editFormOpen}
+        onClose={() => setEditFormOpen(false)}
+        onSuccess={fetchData}
+        transaction={selectedTransaction}
+        categories={categories}
+        accounts={accounts}
+      />
+
+      <ImportTransactionsModal
+        open={importFormOpen}
+        onClose={() => setImportFormOpen(false)}
+        onSuccess={fetchData}
+        accounts={accounts}
       />
     </Box>
   );
 };
 
-export default ListaDespesas;
+export default DespesasPage;

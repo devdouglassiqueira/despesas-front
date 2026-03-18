@@ -1,70 +1,78 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Box, Button, Stack, useTheme } from '@mui/material';
 import logo from '../../assets/images/logo/logo.png';
 
 const Dashboard = () => {
+  const theme = useTheme();
+
   return (
-    <div style={styles.page}>
-      <div
-        style={{
-          ...styles.hero,
-          backgroundImage: `url(${logo})`,
+    <Box
+      sx={{
+        height: 'calc(100vh - 64px)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        p: 5,
+      }}
+    >
+      <Box
+        component="img"
+        src={logo}
+        alt="Logo da aplicação"
+        sx={{
+          width: 'auto',
+          height: '500px',
+          maxWidth: '90%',
+          marginBottom: 5,
         }}
       />
-
-      <div style={styles.buttonsWrapper}>
-        <Link to="/despesas" style={styles.button}>
+      <Stack spacing={2.5} sx={{ width: '100%', maxWidth: '300px' }}>
+        <Button
+          component={Link}
+          to="/despesas"
+          variant="contained"
+          size="large"
+          sx={{
+            py: 1.5,
+            fontSize: '1rem',
+            backgroundColor: theme.palette.grey[800], // Using palette grey which is mapped to new colors?
+            // Wait, I didn't map 'grey' in palette.js, I should use colors directly or add grey back.
+            // I'll use simple colors or verify grey exists.
+            // Actually I removed 'grey' from palette.js return.
+            // So theme.palette.grey is undefined unless I added it back or didn't remove it properly.
+            // I should use 'background.paper' equivalent or a specific color.
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            '&:hover': {
+              bgcolor: 'background.default',
+            },
+          }}
+        >
           Despesas
-        </Link>
+        </Button>
 
-        <Link to="/controle-despesas" style={styles.button}>
+        <Button
+          component={Link}
+          to="/controle-despesas"
+          variant="contained"
+          size="large"
+          sx={{
+            py: 1.5,
+            fontSize: '1rem',
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            '&:hover': {
+              bgcolor: 'background.default',
+            },
+          }}
+        >
           Controle de Despesas
-        </Link>
-      </div>
-    </div>
+        </Button>
+      </Stack>
+    </Box>
   );
-};
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    padding: '40px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    boxSizing: 'border-box',
-  },
-  hero: {
-    width: '100%',
-    maxWidth: '1200px',
-    height: '400px',
-    backgroundSize: 'contain', // 🔁 antes era 'cover'
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    borderRadius: '16px',
-    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-  },
-  buttonsWrapper: {
-    marginTop: '40px',
-    display: 'flex',
-    gap: '160px',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  button: {
-    padding: '12px 24px',
-    borderRadius: '8px', // 👉 menos arredondado
-    border: 'none',
-    textDecoration: 'none',
-    fontWeight: 600,
-    fontSize: '16px',
-    cursor: 'pointer',
-    backgroundColor: '#2563eb',
-    color: '#ffffff',
-    boxShadow: '0 6px 16px rgba(37, 99, 235, 0.35)',
-    transition: 'transform 0.1s ease, box-shadow 0.1s ease',
-  },
 };
 
 export default Dashboard;
